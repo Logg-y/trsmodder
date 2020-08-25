@@ -1,4 +1,4 @@
-#TRSModder
+# TRSModder
 
 This program allows the modding of Dominions 5 TRS files (sprite containers), replacing the standard sprites with others. As far as I can tell, this does not affect multiplayer functionality in any way.
 Specifically, this program processes files which instruct it on which sprites to replace with what. The syntax of these mod files (which I arbitrarily gave the .trsm extension) is intended to be simple and remniscent of the standard Dominions .dm files.
