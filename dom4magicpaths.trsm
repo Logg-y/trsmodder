@@ -1,0 +1,41 @@
+#modname "Dom4 magic path icons"
+#author "Loggy"
+#description "Replace magic path icons with dom4 ones"
+
+-- obligatory demonstration comment
+
+#option "Dom4 Fire icon"
+#edittrs misc 98 32x32 "./dom4magicpaths/path_f.png"
+#end
+
+#option "Dom4 Air icon"
+#edittrs misc 99 32x32 "./dom4magicpaths/path_a.png"
+#end
+
+#option "Dom4 Water icon"
+#edittrs misc 100 32x32 "./dom4magicpaths/path_w.png"
+#end
+
+#option "Dom4 Earth icon"
+#edittrs misc 101 32x32 "./dom4magicpaths/path_e.png"
+#end
+
+#option "Dom4 Astral icon"
+#edittrs misc 102 32x32 "./dom4magicpaths/path_s.png"
+#end
+
+#option "Dom4 Death icon"
+#edittrs misc 103 32x32 "./dom4magicpaths/path_d.png"
+#end
+
+#option "Dom4-like Nature icon"
+#edittrs misc 104 32x32 "./dom4magicpaths/path_n.png"
+#end
+
+#option "Dom4 Blood icon"
+#edittrs misc 105 32x32 "./dom4magicpaths/path_b.png"
+#end
+
+#option "Dom4 Holy icon"
+#edittrs misc 106 32x32 "./dom4magicpaths/path_h.png"
+#end
