@@ -2,7 +2,7 @@
 #author "Loggy"
 #description "Replace magic path icons with dom4 ones"
 
--- obligatory demonstration comment
+-- obligatory demonstration comment, but comments on the end of content lines are NOT ALLOWED!
 
 #option "Dom4 Fire icon"
 #edittrs misc 98 32x32 "./dom4magicpaths/path_f.png"

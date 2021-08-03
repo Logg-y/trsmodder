@@ -7,8 +7,9 @@ import copy
 import re
 import shutil
 from collections import OrderedDict
+import traceback
 
-version = "0.1"
+ver = "0.2"
 
 def RGB_to_FTC(r, g, b):
 	pixel = 0
@@ -18,10 +19,13 @@ def RGB_to_FTC(r, g, b):
 	return(pixel)
 
 class TRSSprite(object):
-	def __init__(self, mm, headeroffset, scanlength=800):
+	def __init__(self, mm, headeroffset, scanlength=800, index=None):
 		self.headeroffset = headeroffset
 		self.width = mm[headeroffset]
 		self.height = mm[headeroffset+1]
+		self.mischeader = struct.unpack(">H", mm[headeroffset+2:headeroffset+4])[0]
+		if self.mischeader not in [0, 1]:
+			print(f"Warning: unknown header bytes for sprite {index} at offset {headeroffset+2} have unknown significance {self.mischeader}")
 		# 4-6 are empty
 		self.unpacked_offset = struct.unpack(">I", mm[headeroffset+4:headeroffset+8])[0]
 		self.packed_offset = struct.unpack(">I", mm[headeroffset+8:headeroffset+12])[0]
@@ -35,6 +39,7 @@ class TRSSprite(object):
 			# as the data length isn't saved anywhere, we have to process it to work out how long it is
 			# (I could just go to the next sprite, but I don't know how safe that really is: are sprites even necessarily packed in order...?)
 			self.packed_data = b""
+			#print(f"Jump to offset: {self.packed_offset}")
 			offset = copy.copy(self.packed_offset)
 			self.packed_data += mm[offset:offset+2]
 			chunk_count = struct.unpack(">H", mm[offset:offset+2])[0] + 1
@@ -50,6 +55,7 @@ class TRSSprite(object):
 					screen_offset += pixels_recorded
 					pixels_recorded = 0
 				else:
+					#print(f"Add {screen_offset} (screen offset) pixels")
 					pixels_recorded += screen_offset
 				self.packed_data += mm[offset:offset+2]
 				pixel_count = struct.unpack(">H", mm[offset:offset+2])[0]
@@ -60,6 +66,8 @@ class TRSSprite(object):
 				self.packed_data += mm[offset:offset+(pixel_count*2)]
 				offset += (pixel_count*2)
 				pixels_recorded += pixel_count
+			#print(f"Total pixels: {pixels_recorded}")
+			#print(f"Read {len(self.packed_data)} bytes of packed data")
 		else:
 			self.packed_offset = 0
 			self.unpacked_data = b""
@@ -76,8 +84,13 @@ class TRSSprite(object):
 		if self.packed:
 			return(len(self.packed_data))
 		return(len(self.unpacked_data))
-	def replace(self, newspr, newwidth, newheight):
-		i = Image.open(newspr)		
+	def replace(self, newspr, newwidth, newheight, forcedoubleresolution=False):
+		if forcedoubleresolution:
+			self.mischeader |= 1
+		orig = Image.open(newspr)
+		# Alpha to black
+		i = Image.new("RGB", orig.size, "BLACK")
+		i.paste(orig, (0,0), orig)
 		i = i.resize((newwidth, newheight))
 		i.thumbnail((newwidth, newheight), Image.LANCZOS)
 		thumb = i
@@ -96,6 +109,7 @@ class TRSSprite(object):
 				#print(p)
 				#print(rgbimg.getpixel((x, y)))
 				out += struct.pack(">H", p)
+		print(f"Old image was {self.width}x{self.height}, new is {thumb.size}")
 		self.width = thumb.size[0]
 		self.height = thumb.size[1]
 		self.packed = False
@@ -109,7 +123,7 @@ class TRSSprite(object):
 		f.write(bytes([self.width]))
 		f.write(bytes([self.height]))
 		#print(f.tell())
-		f.write(b"\x00\x00")
+		f.write(struct.pack(">H", self.mischeader))
 		
 		#print(f.tell())
 		f.write(struct.pack(">I", self.unpacked_offset))
@@ -138,8 +152,8 @@ class TRS(object):
 				self.scanlength = struct.unpack(">H", mm[8:10])[0]
 				offset = 12
 				for x in range(0, self.count):
-					#print(f"Read spr {x+1} of {self.count}")
-					self.sprites.append(TRSSprite(mm, offset, self.scanlength))
+					self.sprites.append(TRSSprite(mm, offset, self.scanlength, x))
+					#print(f"Read spr {x} of {self.count}: it is {self.sprites[-1].width}x{self.sprites[-1].height}, ispacked: {self.sprites[-1].packed}")
 					offset += 12
 	def save(self, fp):
 		# Recalculate sprite offsets
@@ -156,8 +170,9 @@ class TRS(object):
 			f.write(struct.pack(">H", self.filever))
 			f.write(struct.pack(">H", self.scanlength))
 			f.write(b"\x00\x00")
-			for spr in self.sprites:
+			for x, spr in enumerate(self.sprites):
 				spr.writeHeader(f)
+				#print(f"Wrote header for spr {x}: it is {spr.width}x{spr.height}")
 			for spr in self.sprites:
 				spr.writeData(f)
 
@@ -173,16 +188,20 @@ class TRSMError(Exception):
 	pass
 	
 class TRSMAction(object):
-	def __init__(self, trs, sprindex, width, height, repl):
+	def __init__(self, trs, sprindex, width, height, repl, remainder):
 		self.trs = trs
 		self.sprindex = sprindex
 		self.width = width
 		self.height = height
 		self.repl = repl
+		self.remainderwords = remainder.split(" ")
 	def run(self, trsfiles):
 		trs = trsfiles[self.trs]
 		print(f"Replacing sprite {self.sprindex} in {self.trs} with {self.repl} {self.width}x{self.height}")
-		trs.sprites[self.sprindex].replace(self.repl, self.width, self.height)
+		if not os.path.isfile(self.repl):
+			print(f"Failed to replace sprite: replacement {self.repl} not found")
+			return
+		trs.sprites[self.sprindex].replace(self.repl, self.width, self.height, "doubleres" in self.remainderwords)
 	
 class TRSMOption(object):
 	def __init__(self, name):
@@ -230,7 +249,7 @@ class TRSM(object):
 						continue
 					raise TRSMError(f"Unexpected content on line {i+1} - {line}")
 				else:
-					m = re.match(r"#edittrs ([a-zA-Z0-9]*) (\d*) (\d*)x(\d*) \"(.*)\"", line)
+					m = re.match(r"#edittrs ([a-zA-Z0-9]*) (\d*) (\d*)x(\d*) \"(.*)\"(.*)", line)
 					if m is not None:
 						g = m.groups()
 						trs = g[0]
@@ -238,7 +257,8 @@ class TRSM(object):
 						width = int(g[2])
 						height = int(g[3])
 						repl = g[4]
-						act = TRSMAction(trs, sprindex, width, height, repl)
+						remainder = g[5]
+						act = TRSMAction(trs, sprindex, width, height, repl, remainder)
 						curropt.actions.append(act)
 						continue
 					if line.startswith("#end"):
@@ -270,7 +290,11 @@ class TRSM(object):
 		
 		trsfiles = {}
 		for file in files:
+			if not os.path.isfile(file):
+				print(f"Operation failed: could not find TRS file {file}. Make sure this program is running from your Dominions5/data directory.")
+				return
 			trsfiles[file] = TRS(file + ".trs")
+					
 			
 		for opt in optstorun:
 			print(f"Performing operations for option \"{opt.name}\"")
@@ -306,7 +330,7 @@ def main():
 		if f.endswith(".trsm"):
 			print(f"Parsing mod: {f}...")
 			mods.append(TRSM(f))
-	print(f"TRSModder v{version}\n\nThis program allows you to replace Dominions 5 sprites inside the TRS file containers.\nThis makes modifications to vanilla sprites usable in multiplayer, where only you will see them.")
+	print(f"TRSModder v{ver}\n\nThis program allows you to replace Dominions 5 sprites inside the TRS file containers.\nThis makes modifications to vanilla sprites usable in multiplayer, where only you will see them.")
 	print(f"This has not been extensively tested. USE AT YOUR OWN RISK.\nUnexpected local crashes are the most likely way for things to go wrong.\nThis has not yet been tested in real multiplayer games.")
 	print(f"Updates to Dominions will likely overwrite your changes.\nVerifying files through Steam and recreating your backups is STRONGLY recommended after every update.")
 	print("\n\n")
@@ -350,4 +374,9 @@ def main():
 			mod.run()
 		
 if __name__ == "__main__":
-	main()
+	try:
+		main()
+	except:
+		exc = traceback.format_exception()
+		with open("trsmodder_error.txt", "w") as f:
+			f.write(exc)

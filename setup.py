@@ -18,6 +18,7 @@ if __name__ == "__main__":
 	shutil.copy("LICENSE", "trsmodder/LICENSE")
 	shutil.copy("readme.txt", "trsmodder/readme.txt")
 	shutil.copy("readme.md", "trsmodder/readme.md")
+	shutil.copy("changelog.txt", "trsmodder/changelog.txt")
 	shutil.copy("dom4magicpaths.trsm", "trsmodder/dom4magicpaths.trsm")
 	shutil.copytree("dom4magicpaths", "trsmodder/dom4magicpaths")
 
