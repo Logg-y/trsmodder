@@ -1,5 +1,9 @@
 Changelog:
 
+v0.3:
+
+Fixed check to make sure the .trs file exists before trying to edit it.
+
 v0.2:
 
 Now respects the double resolution image flag. Without this, certain sprites would appear at double size after TRSmodder had touched the .trs they were in.

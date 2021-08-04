@@ -9,7 +9,7 @@ import shutil
 from collections import OrderedDict
 import traceback
 
-ver = "0.2"
+ver = "0.3"
 
 def RGB_to_FTC(r, g, b):
 	pixel = 0
@@ -290,7 +290,7 @@ class TRSM(object):
 		
 		trsfiles = {}
 		for file in files:
-			if not os.path.isfile(file):
+			if not os.path.isfile(file + ".trs"):
 				print(f"Operation failed: could not find TRS file {file}. Make sure this program is running from your Dominions5/data directory.")
 				return
 			trsfiles[file] = TRS(file + ".trs")
