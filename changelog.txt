@@ -1,5 +1,10 @@
 Changelog:
 
+v0.4:
+
+Now respects the extra data table in monsters.trs, meaning that file can be edited.
+Added #edittrs_origdim.
+
 v0.3:
 
 Fixed check to make sure the .trs file exists before trying to edit it.

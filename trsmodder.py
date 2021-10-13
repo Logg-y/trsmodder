@@ -9,7 +9,7 @@ import shutil
 from collections import OrderedDict
 import traceback
 
-ver = "0.3"
+ver = "0.4"
 
 def RGB_to_FTC(r, g, b):
 	pixel = 0
@@ -90,7 +90,19 @@ class TRSSprite(object):
 		orig = Image.open(newspr)
 		# Alpha to black
 		i = Image.new("RGB", orig.size, "BLACK")
-		i.paste(orig, (0,0), orig)
+		i.paste(orig, (0,0), None)
+		if newwidth is None:
+			newwidth = orig.width
+			self.width = orig.width
+			if self.width > 256:
+				print(f"Couldn't use replacement {newspr}: sprite is too wide! (max width=256, sprite's width={self.width}")
+				return
+		if newheight is None:
+			newheight = orig.height
+			self.height = orig.height
+			if self.height > 256:
+				print(f"Couldn't use replacement {newspr}: sprite is too tall! (max height=256, sprite's height={self.height}")
+				return
 		i = i.resize((newwidth, newheight))
 		i.thumbnail((newwidth, newheight), Image.LANCZOS)
 		thumb = i
@@ -135,6 +147,10 @@ class TRSSprite(object):
 			self.packed_offset = offset
 		else:
 			self.unpacked_offset = offset
+	def getOffset(self):
+		if self.packed:
+			return self.packed_offset
+		return self.unpacked_offset
 			
 			
 
@@ -142,6 +158,9 @@ class TRS(object):
 	def __init__(self, fp):
 		self.fp = fp
 		self.sprites = []
+		# Some TRS files (so far, I only know monster.trs) have an extra data table in them
+		# I'm not entirely sure what the purpose of this is but not including it does not end well
+		self.extradatatable = b""
 		with open(fp, "rb") as f:
 			with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
 				offset = 0
@@ -155,10 +174,19 @@ class TRS(object):
 					self.sprites.append(TRSSprite(mm, offset, self.scanlength, x))
 					#print(f"Read spr {x} of {self.count}: it is {self.sprites[-1].width}x{self.sprites[-1].height}, ispacked: {self.sprites[-1].packed}")
 					offset += 12
+				# Look for anything else between header and sprite data, and copy it
+				earliestspritedata = None
+				for sprite in self.sprites:
+					if earliestspritedata is None or (sprite.getOffset() < earliestspritedata):
+						earliestspritedata = sprite.getOffset()
+				self.extradatatable = mm[offset:earliestspritedata]
+				#print(f"{len(self.extradatatable)} bytes of extra data, between {offset} and {earliestspritedata}")
+				
 	def save(self, fp):
 		# Recalculate sprite offsets
 		offset = 12 # TRS header is this long
 		offset += (12*len(self.sprites)) # each sprite header is another 12 long
+		offset += len(self.extradatatable)
 		for i, spr in enumerate(self.sprites):
 			spr.setOffset(copy.copy(offset))
 			#print(f"Set offset to {hex(offset)}")
@@ -173,6 +201,7 @@ class TRS(object):
 			for x, spr in enumerate(self.sprites):
 				spr.writeHeader(f)
 				#print(f"Wrote header for spr {x}: it is {spr.width}x{spr.height}")
+			f.write(self.extradatatable)
 			for spr in self.sprites:
 				spr.writeData(f)
 
@@ -197,7 +226,9 @@ class TRSMAction(object):
 		self.remainderwords = remainder.split(" ")
 	def run(self, trsfiles):
 		trs = trsfiles[self.trs]
-		print(f"Replacing sprite {self.sprindex} in {self.trs} with {self.repl} {self.width}x{self.height}")
+		widthstring = "<orig>" if self.width is None else self.width
+		heightstring = "<orig>" if self.height is None else self.height
+		print(f"Replacing sprite {self.sprindex} in {self.trs} with {self.repl} {widthstring}x{heightstring}")
 		if not os.path.isfile(self.repl):
 			print(f"Failed to replace sprite: replacement {self.repl} not found")
 			return
@@ -259,6 +290,16 @@ class TRSM(object):
 						repl = g[4]
 						remainder = g[5]
 						act = TRSMAction(trs, sprindex, width, height, repl, remainder)
+						curropt.actions.append(act)
+						continue
+					m = re.match(r"#edittrs_origdim ([a-zA-Z0-9]*) (\d*) \"(.*)\"(.*)", line)
+					if m is not None:
+						g = m.groups()
+						trs = g[0]
+						sprindex = int(g[1])
+						repl = g[2]
+						remainder = g[3]
+						act = TRSMAction(trs, sprindex, None, None, repl, remainder)
 						curropt.actions.append(act)
 						continue
 					if line.startswith("#end"):
@@ -377,6 +418,6 @@ if __name__ == "__main__":
 	try:
 		main()
 	except:
-		exc = traceback.format_exception()
+		exc = traceback.format_exc()
 		with open("trsmodder_error.txt", "w") as f:
 			f.write(exc)
